@@ -508,8 +508,6 @@ function renderSlip(slip) {
   const p1 = slip.player1;
   const p2 = slip.player2;
 
-  const headerLine = [c.event, c.round, c.table].filter(Boolean).join('  ·  ');
-
   const gameRows = c.games.map(g =>
     `<div class="game-row">
        <span class="p-box"></span>
