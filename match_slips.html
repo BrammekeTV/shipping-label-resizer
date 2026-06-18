@@ -241,7 +241,7 @@
     <div class="nav-bar-right">
       <button class="nav-btn secondary" id="btn-new-file" style="display:none" onclick="resetToUpload()">← New file</button>
       <button class="nav-btn" id="btn-print" style="display:none" onclick="window.print()">🖨 Print</button>
-      <button class="theme-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle between light and dark theme">
+      <button class="theme-btn" id="theme-toggle" title="Toggle theme">
         <span id="theme-icon">☾</span>
       </button>
     </div>
@@ -290,10 +290,10 @@
   function applyTheme(theme) {
     html.setAttribute('data-theme', theme);
     icon.textContent = theme === 'dark' ? '☀' : '☾';
-    try { localStorage.setItem('theme', theme); } catch (_) {}
+    try { localStorage.setItem('theme', theme); } catch (_) { /* ignore: private browsing or storage full */ }
   }
 
-  function saved() { try { return localStorage.getItem('theme'); } catch (_) { return null; } }
+  function saved() { try { return localStorage.getItem('theme'); } catch (_) { return null; /* private browsing */ } }
 
   applyTheme(saved() || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 
@@ -366,9 +366,14 @@ function processHTML(html) {
     .map(s => s.textContent)
     .join('\n');
   const cleanCSS = rawCSS
-    /* Remove @page rules */
+    /*
+     * Strip @page rules — we define our own 62mm auto page.
+     * Strip bare body rules — they would override our chrome styles.
+     * Note: these regexes handle the simple single-block patterns used by
+     * standard match slip exports; deeply nested or multi-line rules are
+     * left in place (harmless, as no such rules appear in typical exports).
+     */
     .replace(/@page\b[^{]*\{[^}]*\}/gi, '')
-    /* Remove bare body rules that would stomp our chrome styles */
     .replace(/(?:^|[\s;}])body\s*\{[^}]*\}/gi, '');
 
   const styleEl = document.createElement('style');
