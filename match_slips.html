@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Match Slip Printer</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/barcodes/JsBarcode.code128.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Screen chrome ── */
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+    }
+
+    .nav-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      background: #fff;
+      border-bottom: 1px solid #e0e3ec;
+    }
+    .nav-bar a { color: #5c6bc0; text-decoration: none; font-size: 0.9rem; font-weight: 600; }
+    .nav-bar a:hover { text-decoration: underline; }
+    .nav-bar .sep { color: #ccc; }
+    .nav-bar .current { color: #1a1a2e; font-size: 0.9rem; font-weight: 600; }
+    .nav-bar .spacer { flex: 1; }
+    .nav-btn {
+      padding: 0.4rem 1rem;
+      background: #5c6bc0;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .nav-btn:hover { background: #4a58a8; }
+    .nav-btn.secondary {
+      background: none;
+      color: #5c6bc0;
+      border: 2px solid #5c6bc0;
+    }
+    .nav-btn.secondary:hover { background: #f0f1ff; }
+
+    /* ── Upload screen ── */
+    .upload-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem;
+    }
+    .upload-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 2rem;
+      width: 100%;
+      max-width: 540px;
+    }
+    .upload-card h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.2rem; }
+    .upload-card .subtitle { color: #666; font-size: 0.92rem; margin-bottom: 1.75rem; }
+
+    .drop-zone {
+      border: 2px dashed #c5c9d6;
+      border-radius: 12px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fafbfc;
+    }
+    .drop-zone:hover, .drop-zone.drag-over { border-color: #5c6bc0; background: #f0f1ff; }
+    .drop-zone svg { color: #8e99d4; margin-bottom: 0.6rem; }
+    .drop-zone p { color: #555; font-size: 0.95rem; }
+    .drop-zone span.hl { color: #5c6bc0; font-weight: 600; }
+    .drop-zone .sub { font-size: 0.8rem; color: #aaa; margin-top: 0.3rem; }
+    #file-input { display: none; }
+
+    .error-msg {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      background: #fff3f3;
+      border: 1px solid #f5c6c6;
+      border-radius: 8px;
+      color: #c0392b;
+      font-size: 0.88rem;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── Slip preview screen ── */
+    .preview-screen { display: none; }
+
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: white;
+      border-bottom: 1px solid #e0e3ec;
+    }
+    .slip-count { font-size: 0.88rem; color: #666; }
+    .preview-toolbar .spacer { flex: 1; }
+
+    .slip-list-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem 1rem;
+      gap: 1.5rem;
+    }
+
+    /* ── Print setup ── */
+    @page {
+      size: 62mm auto;
+      margin: 2mm;
+    }
+
+    @media print {
+      .nav-bar,
+      .upload-screen,
+      .preview-toolbar { display: none !important; }
+
+      body { background: white; }
+
+      .preview-screen { display: block !important; }
+
+      .slip-list-screen {
+        padding: 0;
+        gap: 0;
+        display: block;
+      }
+    }
+
+    /* ── Match slip card ── */
+    .match-slip {
+      width: 62mm;
+      background: white;
+      border: 1px solid #d0d3de;
+      border-radius: 5px;
+      overflow: hidden;
+      font-family: Verdana, Arial, Helvetica, sans-serif;
+      font-size: 8.5pt;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .match-slip:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    @media print {
+      .match-slip {
+        border: none;
+        border-radius: 0;
+        width: 100%;
+        box-shadow: none;
+      }
+    }
+
+    /* ── Slip header ── */
+    .slip-header {
+      background: #1a1a2e;
+      color: white;
+      text-align: center;
+      padding: 2.5mm 2mm 2mm;
+      line-height: 1.35;
+    }
+    .slip-header .event-name { font-size: 11pt; font-weight: 700; }
+    .slip-header .round-table { font-size: 8pt; opacity: 0.8; margin-top: 0.5mm; }
+
+    /* ── Player sections ── */
+    .player-section { padding: 2mm 2.5mm; }
+    .player-section + .player-section { border-top: 1px solid #ddd; }
+
+    .player-label {
+      font-size: 6.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #999;
+      margin-bottom: 1mm;
+    }
+
+    .player-name {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #1a1a2e;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-meta {
+      font-size: 7.5pt;
+      color: #666;
+      margin-top: 0.75mm;
+    }
+
+    .player-barcode-wrap {
+      margin: 1.5mm 0 1mm;
+      text-align: center;
+      min-height: 8mm;
+    }
+    .player-barcode-wrap svg { max-width: 100%; height: 8mm; }
+
+    .player-initial {
+      font-size: 8pt;
+      color: #333;
+      margin-top: 1.5mm;
+    }
+    .player-initial .line {
+      display: inline-block;
+      border-bottom: 1px solid #333;
+      width: 24mm;
+      vertical-align: bottom;
+    }
+
+    /* ── Score section ── */
+    .score-section {
+      border-top: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
+      padding: 2mm 2.5mm;
+    }
+
+    .score-label {
+      font-size: 6.5pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #999;
+      margin-bottom: 1.5mm;
+      text-align: center;
+    }
+
+    .game-row {
+      display: flex;
+      align-items: center;
+      gap: 1.5mm;
+      margin-bottom: 1.25mm;
+    }
+    .game-row .p-box { width: 4.5mm; height: 4.5mm; border: 1.5px solid #444; flex-shrink: 0; }
+    .game-row .game-name { flex: 1; text-align: center; font-size: 7.5pt; color: #444; white-space: nowrap; }
+
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 2mm;
+      gap: 1mm;
+    }
+    .result-opt {
+      flex: 1;
+      border: 1.5px solid #333;
+      border-radius: 3px;
+      padding: 1mm 0;
+      font-size: 7.5pt;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    /* ── Tie / key footer ── */
+    .slip-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2mm;
+      padding: 1.5mm 2.5mm;
+      border-top: 1px solid #ddd;
+      background: #fafafa;
+    }
+    .slip-footer svg { height: 7mm; max-width: 30mm; }
+    .tie-key-text { font-size: 7pt; color: #888; text-align: right; line-height: 1.4; }
+  </style>
+</head>
+<body>
+
+  <nav class="nav-bar">
+    <a href="index.html">📦 Label Resizer</a>
+    <span class="sep">›</span>
+    <span class="current">🏓 Match Slip Printer</span>
+    <span class="spacer"></span>
+    <button class="nav-btn secondary" id="btn-new-file" style="display:none" onclick="resetToUpload()">← New file</button>
+    <button class="nav-btn" id="btn-print" style="display:none" onclick="window.print()">🖨 Print</button>
+  </nav>
+
+  <!-- Upload screen -->
+  <div class="upload-screen" id="upload-screen">
+    <div class="upload-card">
+      <h1>🏓 Match Slip Printer</h1>
+      <p class="subtitle">Upload your match slip HTML export — each slip prints as a 62 mm label</p>
+
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5
+               a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625
+               c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75
+               c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+        </svg>
+        <p><span class="hl">Click to upload</span> or drag & drop</p>
+        <p class="sub">HTML match slip file (e.g. eematch_slips.html)</p>
+      </div>
+      <input type="file" id="file-input" accept=".html,.htm,text/html" />
+
+      <div class="error-msg" id="error-msg"></div>
+    </div>
+  </div>
+
+  <!-- Preview/print screen -->
+  <div class="preview-screen" id="preview-screen">
+    <div class="preview-toolbar">
+      <span class="slip-count" id="slip-count"></span>
+      <span class="spacer"></span>
+    </div>
+    <div class="slip-list-screen" id="slip-list"></div>
+  </div>
+
+<script>
+/* ── File input / drag-drop ── */
+const dropZone   = document.getElementById('drop-zone');
+const fileInput  = document.getElementById('file-input');
+const errorMsg   = document.getElementById('error-msg');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  fileInput.value = '';
+});
+
+function loadFile(file) {
+  if (!file.name.match(/\.html?$/i) && file.type && !file.type.includes('html')) {
+    showError('Please upload an HTML file.');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => processHTML(e.target.result);
+  reader.onerror = () => showError('Could not read the file.');
+  reader.readAsText(file);
+}
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.classList.add('visible');
+}
+
+function resetToUpload() {
+  document.getElementById('upload-screen').style.display = '';
+  document.getElementById('preview-screen').style.display = 'none';
+  document.getElementById('btn-new-file').style.display = 'none';
+  document.getElementById('btn-print').style.display = 'none';
+  errorMsg.classList.remove('visible');
+  document.getElementById('slip-list').innerHTML = '';
+}
+
+/* ── HTML parsing ── */
+function processHTML(html) {
+  errorMsg.classList.remove('visible');
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  const slipTables = doc.querySelectorAll('table.match_slip');
+  if (!slipTables.length) {
+    showError('No match slips found in this file. Make sure you uploaded the correct match slip HTML export.');
+    return;
+  }
+
+  const slips = Array.from(slipTables).map(parseSlip);
+
+  renderSlips(slips);
+
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('preview-screen').style.display = 'block';
+  document.getElementById('btn-new-file').style.display = '';
+  document.getElementById('btn-print').style.display = '';
+  document.getElementById('slip-count').textContent = `${slips.length} slip${slips.length !== 1 ? 's' : ''} loaded`;
+}
+
+function parseSlip(table) {
+  const q  = sel => table.querySelector(sel);
+
+  /* Player name: prefer the <b> inside below-barcode-padding */
+  function playerName(infoDetails) {
+    const b = infoDetails && infoDetails.querySelector('.below-barcode-padding b');
+    return b ? b.textContent.trim() : '';
+  }
+
+  /* Table label: the .heading span inside below-barcode-padding */
+  function tableLabel(infoDetails) {
+    const h = infoDetails && infoDetails.querySelector('.below-barcode-padding .heading');
+    return h ? h.textContent.trim() : '';
+  }
+
+  /* Record (win/loss) from the float-right span inside win-details */
+  function playerRecord(winDetails) {
+    if (!winDetails) return '';
+    const span = winDetails.querySelector('span[style*="float"]');
+    if (!span) return '';
+    for (const node of span.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        return node.textContent.trim();
+      }
+    }
+    return '';
+  }
+
+  /* Rating/number from the font-size:18px span in win-details */
+  function playerNumber(winDetails) {
+    if (!winDetails) return '';
+    const span = winDetails.querySelector('span[style*="18px"]');
+    if (!span) return '';
+    let text = '';
+    for (const node of span.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) text += node.textContent;
+    }
+    return text.trim();
+  }
+
+  /* Event name and round from the <b> inside tied-info below-barcode-padding */
+  function eventRound(tiedDetails) {
+    const b = tiedDetails && tiedDetails.querySelector('.below-barcode-padding b');
+    if (!b) return { event: '', round: '' };
+    const parts = b.innerHTML
+      .split(/<br\s*\/?>/i)
+      .map(s => s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    return { event: parts[0] || '', round: parts.slice(1).join(' ').trim() };
+  }
+
+  /* Count games from the game-row spans */
+  function gameNames(tiedDetails) {
+    const gamesSpan = tiedDetails && tiedDetails.querySelector('span[style*="14px"]');
+    if (!gamesSpan) return ['Game 1', 'Game 2', 'Game 3'];
+    const lines = gamesSpan.innerHTML.split(/<br\s*\/?>/i).map(s => s.replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+    return lines.map((line, i) => {
+      const m = line.match(/game\s+\d+/i);
+      return m ? m[0] : `Game ${i + 1}`;
+    });
+  }
+
+  const p1Info = q('.player-1-info-details');
+  const p2Info = q('.player-2-info-details');
+  const p1Win  = q('.player-1-win-details');
+  const p2Win  = q('.player-2-win-details');
+  const tied   = q('.tied-info-details');
+  const { event, round } = eventRound(tied);
+
+  return {
+    player1: {
+      name:    playerName(p1Info),
+      number:  playerNumber(p1Win),
+      record:  playerRecord(p1Win),
+      barcode: q('.player-1-barcode') && q('.player-1-barcode').dataset.barcode || '',
+      key:     p1Info ? (p1Info.querySelector('i') || {}).textContent || '' : '',
+    },
+    player2: {
+      name:    playerName(p2Info),
+      number:  playerNumber(p2Win),
+      record:  playerRecord(p2Win),
+      barcode: q('.player-2-barcode') && q('.player-2-barcode').dataset.barcode || '',
+      key:     p2Info ? (p2Info.querySelector('i') || {}).textContent || '' : '',
+    },
+    center: {
+      event,
+      round,
+      table:      tableLabel(p1Info),
+      tieBarcode: q('.tie-barcode') && q('.tie-barcode').dataset.barcode || '',
+      tieKey:     tied ? (tied.querySelector('i') || {}).textContent || '' : '',
+      games:      gameNames(tied),
+    },
+  };
+}
+
+/* ── Rendering ── */
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function barcodeEl(value, cssClass) {
+  if (!value || !value.trim()) return '';
+  return `<svg class="barcode ${esc(cssClass)}"
+    jsbarcode-format="CODE128"
+    jsbarcode-value="${esc(value.trim())}"
+    jsbarcode-width="1.5"
+    jsbarcode-height="30"
+    jsbarcode-padding="0"
+    jsbarcode-margin="0"
+    jsbarcode-displayvalue="false"></svg>`;
+}
+
+function renderSlip(slip) {
+  const c = slip.center;
+  const p1 = slip.player1;
+  const p2 = slip.player2;
+
+  const gameRows = c.games.map(g =>
+    `<div class="game-row">
+       <span class="p-box"></span>
+       <span class="game-name">${esc(g)}</span>
+       <span class="p-box"></span>
+     </div>`
+  ).join('');
+
+  const tieFooter = c.tieBarcode
+    ? `<div class="slip-footer">
+         <div>${barcodeEl(c.tieBarcode, 'tie-bc')}</div>
+         <div class="tie-key-text">${esc(c.tieKey)}</div>
+       </div>`
+    : '';
+
+  return `
+  <div class="match-slip">
+    <div class="slip-header">
+      <div class="event-name">${esc(c.event) || 'Match Slip'}</div>
+      <div class="round-table">${esc([c.round, c.table].filter(Boolean).join('  ·  '))}</div>
+    </div>
+
+    <div class="player-section">
+      <div class="player-label">Player 1</div>
+      <div class="player-name">${esc(p1.name)}</div>
+      <div class="player-meta">${esc(p1.number)}${p1.record ? ' &nbsp;·&nbsp; ' + esc(p1.record) : ''}</div>
+      <div class="player-barcode-wrap">${barcodeEl(p1.barcode, 'p1-bc')}</div>
+      <div class="player-initial">Initial:&nbsp;<span class="line"></span></div>
+    </div>
+
+    <div class="score-section">
+      <div class="score-label">Score — checkmark winner of each game</div>
+      ${gameRows}
+      <div class="result-row">
+        <span class="result-opt">P1 WINS</span>
+        <span class="result-opt">TIE</span>
+        <span class="result-opt">P2 WINS</span>
+      </div>
+    </div>
+
+    <div class="player-section">
+      <div class="player-label">Player 2</div>
+      <div class="player-name">${esc(p2.name)}</div>
+      <div class="player-meta">${esc(p2.number)}${p2.record ? ' &nbsp;·&nbsp; ' + esc(p2.record) : ''}</div>
+      <div class="player-barcode-wrap">${barcodeEl(p2.barcode, 'p2-bc')}</div>
+      <div class="player-initial">Initial:&nbsp;<span class="line"></span></div>
+    </div>
+
+    ${tieFooter}
+  </div>`;
+}
+
+function renderSlips(slips) {
+  const list = document.getElementById('slip-list');
+  list.innerHTML = slips.map(renderSlip).join('');
+
+  if (typeof JsBarcode === 'function') {
+    try { JsBarcode('.barcode').init(); } catch(e) { console.warn('JsBarcode error:', e); }
+  }
+}
+</script>
+</body>
+</html>

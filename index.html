@@ -101,6 +101,24 @@
       border-color: var(--border-strong);
       color: var(--text);
     }
+    .page-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-link:hover {
+      color: var(--text);
+      background: var(--surface-muted);
+    }
 
     /* ── Main layout ─────────────────────────────────────────────── */
     .page-main {
@@ -463,9 +481,12 @@
     <span class="page-title">Shipping Label Resizer</span>
     <span class="page-sub">100% in-browser</span>
   </div>
-  <button class="theme-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle between light and dark theme">
-    <span id="theme-icon">☾</span>
-  </button>
+  <div class="page-header-right">
+    <a href="match_slips.html" class="nav-link">Match Slips</a>
+    <button class="theme-btn" id="theme-toggle" title="Toggle theme" aria-label="Toggle between light and dark theme">
+      <span id="theme-icon">☾</span>
+    </button>
+  </div>
 </header>
 
 <main class="page-main">
