@@ -182,34 +182,48 @@
 
     .slip-list-screen {
       display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 24px 16px;
-      gap: 20px;
+      /* flex-direction: column; */
+      /* width: 20px; */
+      flex-wrap: wrap;
+      /* align-items: center; */
+      padding: 300px 16px;
+      /* gap: 700px; */
+      /* gap: -1400px; */
+      grid-gap: 0;
     }
 
-    /* ── Slip wrapper — scales original 700px slip to 62mm ── */
+    /* ── Slip wrapper ── */
     /*
-     * Original match slips are 700 CSS px wide.
-     * 62mm = 62 * (96/25.4) ≈ 234.33 CSS px
-     * zoom = 234.33 / 700 ≈ 0.3348
+     * Slips are rotated 90deg so they read along the long (209mm) axis of
+     * the label. On screen this is just a visual rotation; for print, the
+     * exact scale needed to fit each slip to the 62mm label is computed
+     * dynamically in JS (see updatePrintScale()) and applied via the
+     * --print-scale variable, so this isn't tied to one fixed slip size.
      */
     .slip-wrapper {
       display: flow-root;
       page-break-after: always;
       break-after: page;
+      transform: rotate(90deg);
+      /* border-left: 40px white solid; */
+      /* margin-right: -450px; adjust until gap disappears */
+      /* padding-left: 50px; */
+      /* padding-right: 50px; */
     }
     .slip-wrapper:last-child {
       page-break-after: auto;
       break-after: auto;
     }
-    .slip-wrapper > table.match_slip {
-      zoom: 0.3348;
+
+    @media screen {
+      .slip-wrapper {
+        margin-right: -450px; /* tweak as needed */
+      }
     }
 
     /* ── Print setup ── */
     @page {
-      size: 62mm auto;
+      size: 62mm 209mm;
       margin: 0;
     }
 
@@ -224,9 +238,34 @@
 
       .slip-list-screen {
         padding: 0;
-        gap: 0;
         display: block;
-        align-items: unset;
+      }
+
+      /*
+       * Each .slip-wrapper becomes one physical 62mm x 209mm label page.
+       * The table itself (not the wrapper) is rotated and scaled, so the
+       * wrapper can act as a normal flex box that centers it perfectly
+       * regardless of the slip's actual on-page rendered size.
+       *
+       * --print-scale is computed in JS (see updatePrintScale()) from the
+       * slip's real rendered dimensions, so this works for any slip size —
+       * no more hardcoded zoom values or guessed negative margins.
+       */
+      .slip-wrapper {
+        margin: 0;
+        transform: none;
+        width: 62mm;
+        height: 209mm;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .slip-wrapper > table.match_slip {
+        transform: rotate(90deg) scale(var(--print-scale, 1));
+        transform-origin: center center;
+        flex-shrink: 0;
       }
     }
   </style>
@@ -411,7 +450,51 @@ function processHTML(html) {
   document.getElementById('btn-print').style.display = '';
   document.getElementById('slip-count').textContent =
     `${count} slip${count !== 1 ? 's' : ''} loaded`;
+
+  /* Wait a frame so layout (incl. barcodes) has settled before measuring */
+  requestAnimationFrame(() => requestAnimationFrame(updatePrintScale));
 }
+
+/*
+ * ── Print scaling ──
+ * Each slip is rotated 90deg for print and needs to be scaled to exactly
+ * fill a 62mm x 209mm label. Rather than relying on a hardcoded zoom value
+ * (which only works for one fixed slip size), this measures each slip's
+ * actual on-screen footprint — which already reflects the rotate(90deg)
+ * applied to .slip-wrapper for screen display — and computes the scale
+ * factor that fits it to the label, leaving a small safety margin so
+ * nothing prints flush against the label edge. The result is written as a
+ * --print-scale CSS variable on each .slip-wrapper, consumed by the
+ * @media print rule that rotates+scales the table itself.
+ */
+function updatePrintScale() {
+  const PAGE_WIDTH_MM   = 62;
+  const PAGE_HEIGHT_MM  = 209;
+  const SAFE_MARGIN_MM  = 2; /* inset on each side; set to 0 to fill the label edge-to-edge */
+  const mmToPx = mm => (mm * 96) / 25.4;
+
+  const maxWidthPx  = mmToPx(PAGE_WIDTH_MM  - SAFE_MARGIN_MM * 2);
+  const maxHeightPx = mmToPx(PAGE_HEIGHT_MM - SAFE_MARGIN_MM * 2);
+
+  document.querySelectorAll('.slip-wrapper').forEach(wrapper => {
+    const table = wrapper.querySelector('table.match_slip');
+    if (!table) return;
+
+    /* This rect already includes the wrapper's rotate(90deg), so its
+       width/height are the slip's rotated footprint at scale 1. */
+    const rect = table.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const scale = Math.min(maxWidthPx / rect.width, maxHeightPx / rect.height);
+    if (Number.isFinite(scale) && scale > 0) {
+      wrapper.style.setProperty('--print-scale', scale.toFixed(4));
+    }
+  });
+}
+
+/* Recompute right before the browser builds the print job, in case fonts
+   or images finished loading late and shifted slip dimensions slightly. */
+window.addEventListener('beforeprint', updatePrintScale);
 
 function escAttr(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
